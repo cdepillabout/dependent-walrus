@@ -21,6 +21,9 @@ description:         Please see the README on GitHub at <https://github.com/cdep
 
 dependencies:
   - base >= 4.7 && < 5
+  - adjunctions
+  - distributive
+  - mono-traversable
   - singletons
 
 library:
@@ -29,7 +32,7 @@ library:
 tests:
   tasty:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:         test/tasty
     ghc-options:
       - -threaded
       - -rtsopts
@@ -39,7 +42,7 @@ tests:
 
   doctest:
     main:                Doctest.hs
-    source-dirs:         test
+    source-dirs:         test/doctest
     ghc-options:
       - -threaded
       - -rtsopts

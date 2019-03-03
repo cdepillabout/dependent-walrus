@@ -1,6 +1,22 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RoleAnnotations #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Module    : Termonad.Config.Vec
@@ -46,6 +62,7 @@ import Data.Distributive (Distributive(distribute))
 import qualified Data.Foldable as Data.Foldable
 import Data.Functor.Rep (Representable(..), apRep, bindRep, distributeRep, pureRep)
 import Data.Kind (Type)
+import Data.MonoTraversable (Element, MonoFoldable, MonoFunctor, MonoPointed)
 import Data.Singletons.Prelude
 import Data.Singletons.TH
 import Text.Show (showParen, showString)
@@ -456,6 +473,18 @@ unsafeFromListVec_ = unsafeFromListVec sing
 -- Matrix --
 ------------
 
+-- | This is a type family that gives us arbitrarily-ranked matricies.
+--
+-- For example, this is a Matrix with three dimensions.  It is represented as a
+-- 'Vec' containing a 'Vec' containing a 'Vec':
+--
+-- >>> Refl :: MatrixTF '[N3, N9, N7] Float :~: Vec N3 (Vec N9 (Vec N7 Float))
+-- Refl
+--
+-- A Matrix with no dimensions represents a scalar value:
+--
+-- >>> Refl :: MatrixTF '[] Float :~: Float
+-- Refl
 type family MatrixTF (ns :: [Peano]) (a :: Type) :: Type where
   MatrixTF '[] a = a
   MatrixTF (n ': ns) a = Vec n (MatrixTF ns a)

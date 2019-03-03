@@ -9,5 +9,9 @@ main :: IO ()
 main = doctest $ ["src"] <> ghcArgs
 
 ghcArgs :: [String]
-ghcArgs = []
+ghcArgs =
+  [ "-XDataKinds"
+  , "-XTypeApplications"
+  , "-XTypeOperators"
+  ]
 
