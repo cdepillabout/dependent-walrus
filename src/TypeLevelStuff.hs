@@ -701,8 +701,14 @@ setAtMatrix fins a = updateAtMatrix fins (const a)
 --
 -- Otherwise, this does normal matrix multiplication:
 --
--- >>> let Just mat1 = fromListVec_
---
+-- >>> let Just mat1 = fromListMatrix (sing @'[N2, N3]) [1..6]
+-- >>> mat1
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)}
+-- >>> let Just mat2 = fromListMatrix (sing @'[N3, N2]) [7..12]
+-- >>> mat2
+-- Matrix {unMatrix = (7 :* (8 :* EmptyVec)) :* ((9 :* (10 :* EmptyVec)) :* ((11 :* (12 :* EmptyVec)) :* EmptyVec))}
+-- >>> matrixMult (sing @N2) (sing @N3) (sing @N2) mat1 mat2
+-- Matrix {unMatrix = (58 :* (64 :* EmptyVec)) :* ((139 :* (154 :* EmptyVec)) :* EmptyVec)}
 matrixMult
   :: forall n m o a
    . Num a
@@ -813,6 +819,15 @@ fromListLeftOverMatrix (SCons (n :: Sing (nt :: Peano)) (ms :: Sing ms)) as = do
 -- | Just like 'fromListLeftOverMatrix' but passes the 'Matrix' ranks implicitly.
 fromListLeftOverMatrix_ :: forall ns a. SingI ns => [a] -> Maybe (Matrix ns a, [a])
 fromListLeftOverMatrix_ = fromListLeftOverMatrix sing
+
+-- | Just like 'fromListLeftOverMatrix' but don't return the leftover elements from
+-- the input list.
+fromListMatrix :: forall ns a. Sing ns -> [a] -> Maybe (Matrix ns a)
+fromListMatrix ns = fmap fst . fromListLeftOverMatrix ns
+
+-- | Just like 'fromListMatrix' but passes the 'Matrix' ranks implicitly.
+fromListMatrix_ :: forall ns a. SingI ns => [a] -> Maybe (Matrix ns a)
+fromListMatrix_ = fromListMatrix sing
 
 ----------------------
 -- Matrix Instances --
