@@ -59,6 +59,7 @@ module TypeLevelStuff
     where
 
 import Data.Distributive (Distributive(distribute))
+import Data.Foldable (foldl')
 import qualified Data.Foldable as Data.Foldable
 import Data.Functor.Rep (Representable(..), apRep, bindRep, distributeRep, pureRep)
 import Data.Kind (Type)
@@ -180,6 +181,15 @@ $(singletons [d|
         then error "Num Peano fromInteger: n is negative"
         else
           if n == 0 then Z else S (fromInteger (n - 1))
+
+  instance Enum Peano where
+    fromEnum Z = 0
+    fromEnum (S n) = 1 + fromEnum n
+
+    toEnum n
+      | n < 0 = error "Enum Peano toEnum: n is negative"
+      | n == 0 = Z
+      | otherwise = S (toEnum (n - 1))
   |])
 
 -- | This is a proof that if we know @'S' n@ is less than @'S' m@, then we
@@ -462,16 +472,49 @@ replicateVec (SS n) a = ConsVec a $ replicateVec n a
 replicateVec_ :: forall n a. SingI n => a -> Vec n a
 replicateVec_ = replicateVec sing
 
+-- | Convert a list to a 'Vec'.
+--
+-- Discards any leftover values from the list.
+--
+-- >>> fromListVec (sing @N3) [1,2,3,4,5]
+-- Just (1 :* (2 :* (3 :* EmptyVec)))
+--
+-- If the list doesn't contain enough elements,
+-- return 'Nothing':
+--
+-- >>> fromListVec (sing @N3) [1,2]
+-- Nothing
 fromListVec :: Sing n -> [a] -> Maybe (Vec n a)
-fromListVec SZ _ = Just EmptyVec
-fromListVec (SS _) [] = Nothing
-fromListVec (SS n) (a:as) = do
-  tailVec <- fromListVec n as
-  pure $ ConsVec a tailVec
+fromListVec n = fmap fst . fromListLeftOverVec n
 
+-- | Like 'fromListVec' but take the 'Vec' length
+-- implicitly.
+--
+-- >>> fromListVec_ @N2 [1..]
+-- Just (1 :* (2 :* EmptyVec))
 fromListVec_ :: SingI n => [a] -> Maybe (Vec n a)
 fromListVec_ = fromListVec sing
 
+-- | Just like 'fromListVec', but return any leftover
+-- items from the list.
+--
+-- >>> fromListLeftOverVec (sing @N3) [1,2,3,4,5]
+-- Just (1 :* (2 :* (3 :* EmptyVec)),[4,5])
+fromListLeftOverVec
+  :: Sing n -> [a] -> Maybe (Vec n a, [a])
+fromListLeftOverVec SZ leftOverAs = Just (EmptyVec, leftOverAs)
+fromListLeftOverVec (SS _) [] = Nothing
+fromListLeftOverVec (SS n) (a:as) = do
+  (tailVec, leftOverAs) <- fromListLeftOverVec n as
+  pure (ConsVec a tailVec, leftOverAs)
+
+-- | Just like 'fromListLeftOverVec' but take the 'Vec'
+-- length implicitly.
+fromListLeftOverVec_
+  :: SingI n => [a] -> Maybe (Vec n a, [a])
+fromListLeftOverVec_ = fromListLeftOverVec sing
+
+-- | Unsafe version of 'fromListVec'.
 unsafeFromListVec :: Sing n -> [a] -> Vec n a
 unsafeFromListVec n as =
   case fromListVec n as of
@@ -712,15 +755,64 @@ getRowMatrix (FS n) (Matrix (_ :* next)) = getRowMatrix n (Matrix next)
 --
 -- Get the third column of a 'Matrix':
 --
--- >>> getColMatrix FZ mat1
+-- >>> getColMatrix (FS (FS FZ)) mat1
 -- 2 :* (5 :* EmptyVec)
 getColMatrix :: forall n m a. Fin m -> Matrix '[n, m] a -> Vec n a
 getColMatrix fin (Matrix vs) = fmap (indexVec fin) vs
 
-fromListMatrix :: forall ns a. Sing ns -> [a] -> Maybe (Matrix ns a)
-fromListMatrix SNil [] = Nothing
-fromListMatrix SNil (a : _) = Just (Matrix a)
-fromListMatrix _ as = undefined
+-- | Similar to 'fromListLeftOverVec' but for a 'Matrix'.
+--
+-- If there are not enough values in the list, then 'Nothing' is returned:
+--
+-- >>> fromListLeftOverMatrix (sing @'[N2, N3]) []
+-- Nothing
+--
+-- A 'Matrix' without a rank just uses a single value from the list:
+--
+-- >>> fromListLeftOverMatrix (sing @'[]) [1,2,3]
+-- Just (Matrix {unMatrix = 1},[2,3])
+--
+-- A 'Matrix' with a single rank just wraps a 'Vec':
+--
+-- >>> fromListLeftOverMatrix (sing @'[N3]) [1,2,3,4,5,6]
+-- Just (Matrix {unMatrix = 1 :* (2 :* (3 :* EmptyVec))},[4,5,6])
+--
+-- A 'Matrix' with multiple ranks:
+--
+-- >>> fromListLeftOverMatrix (sing @'[N2, N3]) [1..8]
+-- Just (Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)},[7,8])
+--
+-- If one of the ranks has 0 elements, then the output matrix also has 0 elements:
+--
+-- >>> fromListLeftOverMatrix (sing @'[N0, N3]) [1..4]
+-- Just (Matrix {unMatrix = EmptyVec},[1,2,3,4])
+-- >>> fromListLeftOverMatrix (sing @'[N3, N0]) [1..4]
+-- Just (Matrix {unMatrix = EmptyVec :* (EmptyVec :* (EmptyVec :* EmptyVec))},[1,2,3,4])
+fromListLeftOverMatrix :: forall ns a. Sing ns -> [a] -> Maybe (Matrix ns a, [a])
+fromListLeftOverMatrix SNil [] = Nothing
+fromListLeftOverMatrix SNil (a : leftOverAs) = Just (Matrix a, leftOverAs)
+fromListLeftOverMatrix (SCons n SNil) as =
+  fmap (\(vec, leftOverAs) -> (Matrix vec, leftOverAs)) $ fromListLeftOverVec n as
+fromListLeftOverMatrix (SCons (n :: Sing (nt :: Peano)) (ms :: Sing ms)) as = do
+    (matrixList, leftOverAs) <- go
+    (finalVecs :: Vec nt (Matrix ms a)) <- fromListVec n matrixList
+    let (finalMatrix :: MatrixTF ns a) = fmap unMatrix finalVecs
+    pure (Matrix finalMatrix, leftOverAs)
+  where
+    -- This outputs a list of submatricies.  This list should be @n@ elements
+    -- long.
+    go :: Maybe ([Matrix ms a], [a])
+    go = foldl' f (Just ([], as)) [1 .. fromSing n]
+
+    f :: Maybe ([Matrix ms a], [a]) -> x -> Maybe ([Matrix ms a], [a])
+    f Nothing _ = Nothing
+    f (Just (mats, remainingAs)) _ = do
+      (newMat, leftOverAs) <- fromListLeftOverMatrix ms remainingAs
+      pure (mats ++ [newMat], leftOverAs)
+
+-- | Just like 'fromListLeftOverMatrix' but passes the 'Matrix' ranks implicitly.
+fromListLeftOverMatrix_ :: forall ns a. SingI ns => [a] -> Maybe (Matrix ns a, [a])
+fromListLeftOverMatrix_ = fromListLeftOverMatrix sing
 
 ----------------------
 -- Matrix Instances --
