@@ -484,6 +484,10 @@ unsafeFromListVec n as =
 unsafeFromListVec_ :: SingI n => [a] -> Vec n a
 unsafeFromListVec_ = unsafeFromListVec sing
 
+zipWithVec :: (a -> b -> c) -> Vec n a -> Vec n b -> Vec n c
+zipWithVec _ EmptyVec EmptyVec = EmptyVec
+zipWithVec f (a :* as) (b :* bs) = f a b :* zipWithVec f as bs
+
 ------------
 -- Matrix --
 ------------
@@ -647,11 +651,14 @@ setAtMatrix fins a = updateAtMatrix fins (const a)
 --
 -- When @m@ is 0, this produces a @n@ by @o@ matrix where all elements are 0.
 --
--- >>> mat1 = replicateMatrix_ @'[N3, N0] 3
--- >>> mat2 = replicateMatrix_ @'[N0, N2] 3
+-- >>> let mat1 = replicateMatrix_ @'[N3, N0] 3
+-- >>> let mat2 = replicateMatrix_ @'[N0, N2] 3
 -- >>> matrixMult (sing @N3) (sing @N0) (sing @N2) mat1 mat2
 -- Matrix {unMatrix = (0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* EmptyVec))}
 --
+-- Otherwise, this does normal matrix multiplication:
+--
+-- >>> let Just mat1 = fromListVec_
 --
 matrixMult
   :: forall n m o a
@@ -666,21 +673,24 @@ matrixMult n SZ o _ _ = replicateMatrix (doubletonList n o) 0
 matrixMult n m o mat1 mat2 = genMatrix (doubletonList n o) go
   where
     go :: HList Fin '[n, o] -> a
-    go (finN :< finO :< EmptyHList) = undefined
+    go (finN :< finO :< EmptyHList) =
+      let rowVec = getRowMatrix finN mat1
+          colVec = getColMatrix finO mat2
+      in sum $ zipWithVec (*) rowVec colVec
 
--- | Get the specified row of a matrix.
+-- | Get the specified row of a 'Matrix'.
 --
 -- >>> let createVal finRow finCol = toIntFin finRow * 2 + toIntFin finCol
 -- >>> let mat1 = genMatrix (sing @'[N3, N2]) (\(r :< c :< EmptyHList) -> createVal r c)
 -- >>> mat1
 -- Matrix {unMatrix = (0 :* (1 :* EmptyVec)) :* ((2 :* (3 :* EmptyVec)) :* ((4 :* (5 :* EmptyVec)) :* EmptyVec))}
 --
--- Get the first row of a matrix:
+-- Get the first row of a 'Matrix':
 --
 -- >>> getRowMatrix FZ mat1
 -- 0 :* (1 :* EmptyVec)
 --
--- Get the third row of a matrix:
+-- Get the third row of a 'Matrix':
 --
 -- >>> getRowMatrix (FS (FS FZ)) mat1
 -- 4 :* (5 :* EmptyVec)
@@ -688,6 +698,29 @@ getRowMatrix :: forall n m a. Fin n -> Matrix '[n, m] a -> Vec m a
 getRowMatrix FZ (Matrix (v :* _)) = v
 getRowMatrix (FS n) (Matrix (_ :* next)) = getRowMatrix n (Matrix next)
 
+-- | Get the specified column of a 'Matrix'.
+--
+-- >>> let createVal finRow finCol = toIntFin finRow * 3 + toIntFin finCol
+-- >>> let mat1 = genMatrix (sing @'[N2, N3]) (\(r :< c :< EmptyHList) -> createVal r c)
+-- >>> mat1
+-- Matrix {unMatrix = (0 :* (1 :* (2 :* EmptyVec))) :* ((3 :* (4 :* (5 :* EmptyVec))) :* EmptyVec)}
+--
+-- Get the first column of a 'Matrix':
+--
+-- >>> getColMatrix FZ mat1
+-- 0 :* (3 :* EmptyVec)
+--
+-- Get the third column of a 'Matrix':
+--
+-- >>> getColMatrix FZ mat1
+-- 2 :* (5 :* EmptyVec)
+getColMatrix :: forall n m a. Fin m -> Matrix '[n, m] a -> Vec n a
+getColMatrix fin (Matrix vs) = fmap (indexVec fin) vs
+
+fromListMatrix :: forall ns a. Sing ns -> [a] -> Maybe (Matrix ns a)
+fromListMatrix SNil [] = Nothing
+fromListMatrix SNil (a : _) = Just (Matrix a)
+fromListMatrix _ as = undefined
 
 ----------------------
 -- Matrix Instances --
