@@ -11,6 +11,7 @@ main = doctest $ ["src"] <> ghcArgs
 ghcArgs :: [String]
 ghcArgs =
   [ "-XDataKinds"
+  , "-XGADTs"
   , "-XTypeApplications"
   , "-XTypeOperators"
   ]

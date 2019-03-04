@@ -447,6 +447,21 @@ updateAtVec (FS n) f (a :* vec)  = a :* updateAtVec n f vec
 setAtVec :: Fin n -> a -> Vec n a -> Vec n a
 setAtVec fin' a = updateAtVec fin' (const a)
 
+-- | Create a 'Vec' of length @n@ where every element is @a@.
+--
+-- >>> replicateVec (sing @N3) 'd'
+-- 'd' :* ('d' :* ('d' :* EmptyVec))
+replicateVec :: Sing n -> a -> Vec n a
+replicateVec SZ _ = EmptyVec
+replicateVec (SS n) a = ConsVec a $ replicateVec n a
+
+-- | Just like 'replicateVec' but take the length argument implicitly.
+--
+-- >>> replicateVec_ @N2 "hello"
+-- "hello" :* ("hello" :* EmptyVec)
+replicateVec_ :: forall n a. SingI n => a -> Vec n a
+replicateVec_ = replicateVec sing
+
 fromListVec :: Sing n -> [a] -> Maybe (Vec n a)
 fromListVec SZ _ = Just EmptyVec
 fromListVec (SS _) [] = Nothing
@@ -585,6 +600,20 @@ genMatrix (SCons (n :: SPeano foo) (ns' :: Sing oaoa)) f =
 genMatrix_ :: SingI ns => (HList Fin ns -> a) -> Matrix ns a
 genMatrix_ = genMatrix sing
 
+-- | Just like 'replicateVec' but for a 'Matrix'.
+--
+-- >>> replicateMatrix (sing @'[N2, N3]) 'b'
+-- Matrix {unMatrix = ('b' :* ('b' :* ('b' :* EmptyVec))) :* (('b' :* ('b' :* ('b' :* EmptyVec))) :* EmptyVec)}
+replicateMatrix :: Sing ns -> a -> Matrix ns a
+replicateMatrix ns a = genMatrix ns (const a)
+
+-- | Just like 'replicateMatrix', but take the length argument implicitly.
+--
+-- >>> replicateMatrix_ @'[N2,N2,N2] 0
+-- Matrix {unMatrix = ((0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* EmptyVec)) :* (((0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* EmptyVec)) :* EmptyVec)}
+replicateMatrix_ :: SingI ns => a -> Matrix ns a
+replicateMatrix_ a = replicateMatrix sing a
+
 indexMatrix :: HList Fin ns -> Matrix ns a -> a
 indexMatrix EmptyHList (Matrix a) = a
 indexMatrix (i :< is) (Matrix vec) = indexMatrix is $ Matrix (indexVec i vec)
@@ -612,6 +641,53 @@ updateAtMatrix (n :< ns) f mat =
 
 setAtMatrix :: HList Fin ns -> a -> Matrix ns a -> Matrix ns a
 setAtMatrix fins a = updateAtMatrix fins (const a)
+
+-- | Multiply two matricies together.  This uses normal matrix multiplication,
+-- not the Hadamard product.
+--
+-- When @m@ is 0, this produces a @n@ by @o@ matrix where all elements are 0.
+--
+-- >>> mat1 = replicateMatrix_ @'[N3, N0] 3
+-- >>> mat2 = replicateMatrix_ @'[N0, N2] 3
+-- >>> matrixMult (sing @N3) (sing @N0) (sing @N2) mat1 mat2
+-- Matrix {unMatrix = (0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* EmptyVec))}
+--
+--
+matrixMult
+  :: forall n m o a
+   . Num a
+  => Sing n
+  -> Sing m
+  -> Sing o
+  -> Matrix '[n, m] a
+  -> Matrix '[m, o] a
+  -> Matrix '[n, o] a
+matrixMult n SZ o _ _ = replicateMatrix (doubletonList n o) 0
+matrixMult n m o mat1 mat2 = genMatrix (doubletonList n o) go
+  where
+    go :: HList Fin '[n, o] -> a
+    go (finN :< finO :< EmptyHList) = undefined
+
+-- | Get the specified row of a matrix.
+--
+-- >>> let createVal finRow finCol = toIntFin finRow * 2 + toIntFin finCol
+-- >>> let mat1 = genMatrix (sing @'[N3, N2]) (\(r :< c :< EmptyHList) -> createVal r c)
+-- >>> mat1
+-- Matrix {unMatrix = (0 :* (1 :* EmptyVec)) :* ((2 :* (3 :* EmptyVec)) :* ((4 :* (5 :* EmptyVec)) :* EmptyVec))}
+--
+-- Get the first row of a matrix:
+--
+-- >>> getRowMatrix FZ mat1
+-- 0 :* (1 :* EmptyVec)
+--
+-- Get the third row of a matrix:
+--
+-- >>> getRowMatrix (FS (FS FZ)) mat1
+-- 4 :* (5 :* EmptyVec)
+getRowMatrix :: forall n m a. Fin n -> Matrix '[n, m] a -> Vec m a
+getRowMatrix FZ (Matrix (v :* _)) = v
+getRowMatrix (FS n) (Matrix (_ :* next)) = getRowMatrix n (Matrix next)
+
 
 ----------------------
 -- Matrix Instances --
@@ -671,3 +747,21 @@ instance SingI ns => Applicative (Matrix ns) where
 instance SingI ns => Monad (Matrix ns) where
   (>>=) :: Matrix ns a -> (a -> Matrix ns b) -> Matrix ns b
   (>>=) = bindRep
+
+----------------------
+-- Helper Functions --
+----------------------
+
+-- | A @singleton@ function for type-level lists.
+--
+-- >>> singletonList (sing @N1)
+-- SCons (SS SZ) SNil
+singletonList :: forall x. Sing x -> Sing '[x]
+singletonList x = SCons x SNil
+
+-- | A function like 'singletonList', but creates a list with two elements.
+--
+-- >>> doubletonList (sing @N0) (sing @N2)
+-- SCons SZ (SCons (SS (SS SZ)) SNil)
+doubletonList :: Sing x -> Sing y -> Sing '[x, y]
+doubletonList x y = singletonList x %++ singletonList y
