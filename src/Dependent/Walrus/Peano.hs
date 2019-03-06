@@ -26,10 +26,6 @@ import Data.Singletons.Prelude
 import Data.Singletons.TH
 import Unsafe.Coerce (unsafeCoerce)
 
------------
--- Peano --
------------
-
 $(singletons [d|
 
   data Peano = Z | S Peano deriving (Eq, Ord, Show)
