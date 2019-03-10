@@ -257,6 +257,28 @@ dotProdMatrix mat vec = undefined
 rowMatrixToVec :: Matrix '[N1, x] a -> Vec x a
 rowMatrixToVec = getRowMatrix FZ
 
+-- | Convert a 'Vec' to a 'Matrix' with a single row.
+--
+-- >>> let Just vec = fromListVec (sing @N3) [1,2,3]
+-- >>> vec
+-- 1 :* (2 :* (3 :* EmptyVec))
+--
+-- >>> vecToRowMatrix vec
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
+vecToRowMatrix :: Vec x a -> Matrix '[N1, x] a
+vecToRowMatrix v = Matrix $ fmap Only v :* EmptyVec
+
+-- | Convert a 'Vec' to a 'Matrix' with a single column.
+--
+-- >>> let Just vec = fromListVec (sing @N3) [1,2,3]
+-- >>> vec
+-- 1 :* (2 :* (3 :* EmptyVec))
+--
+-- >>> vecToColMatrix vec
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
+vecToColMatrix :: Vec x a -> Matrix '[x, N1] a
+vecToColMatrix = transposeMatrix . vecToRowMatrix
+
 -- | Convert a 'Matrix' with only one column to a 'Vec'.
 --
 -- >>> let Just mat = fromListMatrix (sing @'[N3, N1]) [1..3]
