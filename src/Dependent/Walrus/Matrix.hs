@@ -43,6 +43,7 @@ import Dependent.Walrus.Vec
   , genVec
   , imapVec
   , indexVec
+  , replicateVec
   , singletonVec
   , updateAtVec
   , zipWithVec
@@ -267,7 +268,7 @@ rowMatrixToVec = getRowMatrix FZ
 -- >>> vecToRowMatrix vec
 -- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
 vecToRowMatrix :: Vec x a -> Matrix '[N1, x] a
-vecToRowMatrix v = Matrix $ fmap Only v :* EmptyVec
+vecToRowMatrix v = Matrix $ v :* EmptyVec
 
 -- | Convert a 'Vec' to a 'Matrix' with a single column.
 --
@@ -329,6 +330,20 @@ getRowMatrix (FS n) (Matrix (_ :* next)) = getRowMatrix n (Matrix next)
 -- 2 :* (5 :* EmptyVec)
 getColMatrix :: forall n m a. Fin m -> Matrix '[n, m] a -> Vec n a
 getColMatrix fin (Matrix vs) = fmap (indexVec fin) vs
+
+transposeMatrix :: Sing '[n, m] -> Matrix '[n, m] a -> Matrix '[m, n] a
+transposeMatrix (SCons SZ (SCons m SNil)) (Matrix EmptyVec) =
+  Matrix $ replicateVec m EmptyVec
+transposeMatrix (SCons _ (SCons SZ SNil)) _ = Matrix $ EmptyVec
+transposeMatrix (SCons (SS nnn) (SCons (SS mmm) SNil)) (Matrix (v :* vs)) =
+  let inner = transposeMatrix (SCons nnn (SCons (SS mmm) SNil)) (Matrix vs)
+  in prependColMatrix v inner
+
+prependColMatrix :: forall n m a. Vec n a -> Matrix '[n, m] a -> Matrix '[n, 'S m] a
+prependColMatrix EmptyVec (Matrix vs) = Matrix EmptyVec
+prependColMatrix (a :* as) (Matrix (v :* vs)) =
+  let Matrix xxx = prependColMatrix as (Matrix vs)
+  in Matrix ((a :* v) :* xxx)
 
 -- | Similar to 'fromListLeftOverVec' but for a 'Matrix'.
 --
