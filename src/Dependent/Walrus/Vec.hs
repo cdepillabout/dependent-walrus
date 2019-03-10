@@ -33,6 +33,9 @@ import Dependent.Walrus.Fin (Fin(FS, FZ))
 import Dependent.Walrus.IFin (IFin(IFS, IFZ))
 import Dependent.Walrus.Peano (N1, Peano(S, Z), Sing(SS, SZ), SPeano)
 
+-- $setup
+-- >>> import Dependent.Walrus.Peano (N2, N3)
+
 data Vec (n :: Peano) :: Type -> Type where
   EmptyVec :: Vec 'Z a
   (:*) :: !a -> !(Vec n a) -> Vec ('S n) a
@@ -56,7 +59,7 @@ instance MonoFunctor (Vec n a)
 instance SingI n => MonoPointed (Vec n a)
 
 instance SingI n => Applicative (Vec n) where
-  pure a = replaceVec_ a
+  pure a = replicateVec_ a
 
   (<*>) = apVec ($)
 
@@ -93,16 +96,9 @@ indexVec (FS n) (_ :* vec) = indexVec n vec
 singletonVec :: a -> Vec N1 a
 singletonVec a = ConsVec a EmptyVec
 
-replaceVec :: Sing n -> a -> Vec n a
-replaceVec SZ _ = EmptyVec
-replaceVec (SS n) a = a :* replaceVec n a
-
 imapVec :: forall n a b. (Fin n -> a -> b) -> Vec n a -> Vec n b
 imapVec _ EmptyVec = EmptyVec
 imapVec f (a :* as) = f FZ a :* imapVec (\fin' vec -> f (FS fin') vec) as
-
-replaceVec_ :: SingI n => a -> Vec n a
-replaceVec_ = replaceVec sing
 
 apVec :: (a -> b -> c) -> Vec n a -> Vec n b -> Vec n c
 apVec _ EmptyVec _ = EmptyVec

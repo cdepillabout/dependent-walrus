@@ -47,6 +47,10 @@ import Dependent.Walrus.Vec
   , zipWithVec
   )
 
+-- $setup
+-- >>> import Dependent.Walrus.Fin (toIntFin)
+-- >>> import Dependent.Walrus.Peano (N0, N1, N2, N3, N7, N9)
+
 -- | This is a type family that gives us arbitrarily-ranked matricies.
 --
 -- For example, this is a Matrix with three dimensions.  It is represented as a
@@ -208,7 +212,7 @@ setAtMatrix fins a = updateAtMatrix fins (const a)
 --
 -- >>> let mat1 = replicateMatrix_ @'[N3, N0] 3
 -- >>> let mat2 = replicateMatrix_ @'[N0, N2] 3
--- >>> matrixMult (sing @N3) (sing @N0) (sing @N2) mat1 mat2
+-- >>> multMatrix (sing @N3) (sing @N0) (sing @N2) mat1 mat2
 -- Matrix {unMatrix = (0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* ((0 :* (0 :* EmptyVec)) :* EmptyVec))}
 --
 -- Otherwise, this does normal matrix multiplication:
@@ -219,9 +223,9 @@ setAtMatrix fins a = updateAtMatrix fins (const a)
 -- >>> let Just mat2 = fromListMatrix (sing @'[N3, N2]) [7..12]
 -- >>> mat2
 -- Matrix {unMatrix = (7 :* (8 :* EmptyVec)) :* ((9 :* (10 :* EmptyVec)) :* ((11 :* (12 :* EmptyVec)) :* EmptyVec))}
--- >>> matrixMult (sing @N2) (sing @N3) (sing @N2) mat1 mat2
+-- >>> multMatrix (sing @N2) (sing @N3) (sing @N2) mat1 mat2
 -- Matrix {unMatrix = (58 :* (64 :* EmptyVec)) :* ((139 :* (154 :* EmptyVec)) :* EmptyVec)}
-matrixMult
+multMatrix
   :: forall n m o a
    . Num a
   => Sing n
@@ -230,14 +234,39 @@ matrixMult
   -> Matrix '[n, m] a
   -> Matrix '[m, o] a
   -> Matrix '[n, o] a
-matrixMult n SZ o _ _ = replicateMatrix (doubletonList n o) 0
-matrixMult n m o mat1 mat2 = genMatrix (doubletonList n o) go
+multMatrix n SZ o _ _ = replicateMatrix (doubletonList n o) 0
+multMatrix n m o mat1 mat2 = genMatrix (doubletonList n o) go
   where
     go :: HList Fin '[n, o] -> a
     go (finN :< finO :< EmptyHList) =
       let rowVec = getRowMatrix finN mat1
           colVec = getColMatrix finO mat2
       in sum $ zipWithVec (*) rowVec colVec
+
+dotProdMatrix :: Matrix '[n, m] a -> Vec m a -> Vec n a
+dotProdMatrix mat vec = undefined
+
+-- | Convert a 'Matrix' with only one row to a 'Vec'.
+--
+-- >>> let Just mat = fromListMatrix (sing @'[N1, N3]) [1..3]
+-- >>> mat
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
+--
+-- >>> rowMatrixToVec mat
+-- 1 :* (2 :* (3 :* EmptyVec))
+rowMatrixToVec :: Matrix '[N1, x] a -> Vec x a
+rowMatrixToVec = getRowMatrix FZ
+
+-- | Convert a 'Matrix' with only one column to a 'Vec'.
+--
+-- >>> let Just mat = fromListMatrix (sing @'[N3, N1]) [1..3]
+-- >>> mat
+-- Matrix {unMatrix = (1 :* EmptyVec) :* ((2 :* EmptyVec) :* ((3 :* EmptyVec) :* EmptyVec))}
+--
+-- >>> colMatrixToVec mat
+-- 1 :* (2 :* (3 :* EmptyVec))
+colMatrixToVec :: Matrix '[x, N1] a -> Vec x a
+colMatrixToVec = getColMatrix FZ
 
 -- | Get the specified row of a 'Matrix'.
 --
@@ -334,6 +363,9 @@ fromListLeftOverMatrix_ = fromListLeftOverMatrix sing
 
 -- | Just like 'fromListLeftOverMatrix' but don't return the leftover elements from
 -- the input list.
+--
+-- >>> fromListMatrix (sing @'[N2, N3]) [1..6]
+-- Just (Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)})
 fromListMatrix :: forall ns a. Sing ns -> [a] -> Maybe (Matrix ns a)
 fromListMatrix ns = fmap fst . fromListLeftOverMatrix ns
 
