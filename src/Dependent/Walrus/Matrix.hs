@@ -43,6 +43,7 @@ import Dependent.Walrus.Vec
   , genVec
   , imapVec
   , indexVec
+  , singletonVec
   , updateAtVec
   , zipWithVec
   )
@@ -277,7 +278,7 @@ vecToRowMatrix v = Matrix $ fmap Only v :* EmptyVec
 -- >>> vecToColMatrix vec
 -- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
 vecToColMatrix :: Vec x a -> Matrix '[x, N1] a
-vecToColMatrix = transposeMatrix . vecToRowMatrix
+vecToColMatrix v = Matrix $ fmap singletonVec v
 
 -- | Convert a 'Matrix' with only one column to a 'Vec'.
 --
