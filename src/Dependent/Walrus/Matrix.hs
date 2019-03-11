@@ -247,8 +247,19 @@ multMatrix n m o mat1 mat2 = genMatrix (doubletonList n o) go
           colVec = getColMatrix finO mat2
       in sum $ zipWithVec (*) rowVec colVec
 
-dotProdMatrix :: Matrix '[n, m] a -> Vec m a -> Vec n a
-dotProdMatrix mat vec = undefined
+-- | Take the dot product of a 'Matrix' and a 'Vec'.
+--
+-- >>> let Just mat = fromListMatrix_ @'[N2, N3] [1,2,3,4,5,6]
+-- >>> mat
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)}
+-- >>> let Just vec = fromListVec_ @N3 [1,2,3]
+-- >>> vec
+-- 1 :* (2 :* (3 :* EmptyVec))
+--
+-- >>> dotProdMatrix mat vec
+-- 14 :* (32 :* EmptyVec)
+dotProdMatrix :: Num a => Matrix '[n, m] a -> Vec m a -> Vec n a
+dotProdMatrix (Matrix vs) vec = fmap (sum . zipWithVec (*) vec) vs
 
 -- | Convert a 'Matrix' with only one row to a 'Vec'.
 --
