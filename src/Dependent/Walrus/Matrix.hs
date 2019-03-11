@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -52,6 +53,7 @@ import Dependent.Walrus.Vec
 -- $setup
 -- >>> import Dependent.Walrus.Fin (toIntFin)
 -- >>> import Dependent.Walrus.Peano (N0, N1, N2, N3, N7, N9)
+-- >>> import Dependent.Walrus.Vec (fromListVec_)
 
 -- | This is a type family that gives us arbitrarily-ranked matricies.
 --
@@ -277,7 +279,7 @@ vecToRowMatrix v = Matrix $ v :* EmptyVec
 -- 1 :* (2 :* (3 :* EmptyVec))
 --
 -- >>> vecToColMatrix vec
--- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* EmptyVec}
+-- Matrix {unMatrix = (1 :* EmptyVec) :* ((2 :* EmptyVec) :* ((3 :* EmptyVec) :* EmptyVec))}
 vecToColMatrix :: Vec x a -> Matrix '[x, N1] a
 vecToColMatrix v = Matrix $ fmap singletonVec v
 
@@ -331,6 +333,14 @@ getRowMatrix (FS n) (Matrix (_ :* next)) = getRowMatrix n (Matrix next)
 getColMatrix :: forall n m a. Fin m -> Matrix '[n, m] a -> Vec n a
 getColMatrix fin (Matrix vs) = fmap (indexVec fin) vs
 
+-- | Transpose the rows and columns of a 'Matrix'.
+--
+-- >>> let Just mat = fromListMatrix_ @'[N2, N3] [1..6]
+-- >>> mat
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)}
+--
+-- >>> transposeMatrix (sing @'[N2, N3]) mat
+-- Matrix {unMatrix = (1 :* (4 :* EmptyVec)) :* ((2 :* (5 :* EmptyVec)) :* ((3 :* (6 :* EmptyVec)) :* EmptyVec))}
 transposeMatrix :: Sing '[n, m] -> Matrix '[n, m] a -> Matrix '[m, n] a
 transposeMatrix (SCons SZ (SCons m SNil)) (Matrix EmptyVec) =
   Matrix $ replicateVec m EmptyVec
@@ -339,6 +349,21 @@ transposeMatrix (SCons (SS nnn) (SCons (SS mmm) SNil)) (Matrix (v :* vs)) =
   let inner = transposeMatrix (SCons nnn (SCons (SS mmm) SNil)) (Matrix vs)
   in prependColMatrix v inner
 
+-- | Just like 'transposeMatrix' but with the 'Sing' parameter implicit.
+transposeMatrix_ :: SingI '[n, m] => Matrix '[n, m] a -> Matrix '[m, n] a
+transposeMatrix_ = transposeMatrix sing
+
+-- | Prepend a column 'Vec' to a 'Matrix'.
+--
+-- >>> let Just vec = fromListVec_ @N2 [100,200]
+-- >>> vec
+-- 100 :* (200 :* EmptyVec)
+-- >>> let Just mat = fromListMatrix_ @'[N2, N3] [1..6]
+-- >>> mat
+-- Matrix {unMatrix = (1 :* (2 :* (3 :* EmptyVec))) :* ((4 :* (5 :* (6 :* EmptyVec))) :* EmptyVec)}
+--
+-- >>> prependColMatrix vec mat
+-- Matrix {unMatrix = (100 :* (1 :* (2 :* (3 :* EmptyVec)))) :* ((200 :* (4 :* (5 :* (6 :* EmptyVec)))) :* EmptyVec)}
 prependColMatrix :: forall n m a. Vec n a -> Matrix '[n, m] a -> Matrix '[n, 'S m] a
 prependColMatrix EmptyVec (Matrix vs) = Matrix EmptyVec
 prependColMatrix (a :* as) (Matrix (v :* vs)) =
